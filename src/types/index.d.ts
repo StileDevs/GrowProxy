@@ -1,4 +1,4 @@
-interface ProxyConfig {
+export interface ProxyConfig {
   server: {
     host: string;
   };

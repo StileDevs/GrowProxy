@@ -5,11 +5,13 @@ import {
   TankPacket,
   Variant,
   PacketTypes,
-  parseText,
-  TankTypes
+  TankTypes,
+  VariantTypes
 } from "growtopia.js";
 import { Server } from "./Server";
 import ansi from "ansi-colors";
+import { parseText, parseTextToObj } from "./Utils";
+import log from "log4js";
 
 export class Proxy {
   public client: Client;
@@ -30,7 +32,6 @@ export class Proxy {
         ip,
         port,
         enable: false,
-        url: "0.0.0.0",
         type2: false
       }
     });
@@ -46,13 +47,18 @@ export class Proxy {
     this.server = server;
   }
 
+  public toFullBuffer(data: Buffer) {
+    return data.toString("hex").match(/../g).join(" ");
+  }
+
   public start() {
     this.client
       .on("ready", () => {
-        console.log("Proxy ready!");
+        log.getLogger("READY").info("Proxy Ready!");
       })
       .on("connect", (netID) => {
-        console.log("New Peer connected to Proxy: ", netID);
+        log.getLogger("CONNECT").info(`New Peer connected to Proxy: ${netID}`);
+
         this.server.setProxyNetID(netID);
       })
       .on("raw", (netID, data) => {
@@ -62,68 +68,60 @@ export class Proxy {
 
         switch (type) {
           case PacketTypes.ACTION: {
-            const parsed = parseText(data);
+            const parsed = parseTextToObj(data);
 
-            console.log(
-              `[${netID}] Proxy Received ${ansi.yellowBright("[ACTION]")}\n`,
-              parsed,
-              "\n"
-            );
+            log
+              .getLogger(ansi.yellowBright("ACTION"))
+              .info(`[${netID}] Proxy Received\n${data.subarray(4).toString()}`);
+            break;
+          }
+
+          case PacketTypes.STR: {
+            log
+              .getLogger(ansi.cyan(`STRING`))
+              .info(`[${netID}] Proxy Received\n`, data.subarray(4).toString());
             break;
           }
 
           case PacketTypes.TANK: {
             const tankType = data.readUint8(4);
-            console.log(
-              `[${netID}] Proxy Received ${ansi.blueBright(
-                `[TANK] | [${TankTypes[tankType]}] | [Length: ${data.length}]`
-              )}`
-            );
+
+            log
+              .getLogger(ansi.blueBright(`TANK | Length: ${data.length}`))
+              .info(`[${netID}] Proxy Received ${TankTypes[tankType]}`);
+
             switch (tankType) {
-              case TankTypes.STATE: {
-                // maybe change to something?
-                console.log("");
-                break;
-              }
-
               case TankTypes.SEND_ITEM_DATABASE_DATA: {
-                // maybe change to something?
-                console.log("");
-                break;
-              }
-
-              case TankTypes.SEND_MAP_DATA: {
-                // maybe change to something?
-                console.log("");
+                // ignore
                 break;
               }
 
               case TankTypes.CALL_FUNCTION: {
-                const count = data.readUint16LE(60);
-                const VariantType = data.readUint8(62);
+                const variant = Variant.toArray(data);
 
-                if (VariantType === 2) {
-                  const strLength = data.readUint16LE(63);
-                  const strType = data.subarray(67, 67 + strLength).toString();
+                log
+                  .getLogger(`${VariantTypes[variant[0].type]} | VariantList`)
+                  .info("\n", variant.map((v) => `[${v.index}]: ${v.value}`).join("\n"));
 
-                  if (strType === "OnConsoleMessage") {
-                    const textLength = data.readUint32LE(67 + strLength + 4);
-                    const text = data
-                      .subarray(67 + strLength + 4, 67 + strLength + 4 + textLength)
-                      .toString();
+                if (variant[0].typeName === "STRING" && variant[0].value === "OnConsoleMessage") {
+                  const newText = `\`4[PROXY]\`\` ${variant[1].value}`;
 
-                    const newText = `\`4[PROXY]\`\` ${data
-                      .subarray(67 + strLength + 4, 67 + strLength + 4 + textLength)
-                      .toString()}`;
+                  data = Variant.from("OnConsoleMessage", newText).parse().parse();
+                } else if (variant[0].typeName === "STRING" && variant[0].value === "OnSpawn") {
+                  let obj = parseTextToObj(variant[1].value as string);
+                  obj.mstate = "1";
+                  obj.smstate = "0";
 
-                    data = Variant.from("OnConsoleMessage", newText).parse().parse();
-                  }
+                  const parsed = parseText(obj);
+                  data = Variant.from({ delay: -1 }, "OnSpawn", parsed).parse().parse();
                 }
+
                 break;
               }
 
               default: {
-                console.log(data.toString("hex").match(/../g).join(" "), "\n");
+                log.getLogger(`${TankTypes[tankType]}`).info(`${this.toFullBuffer(data)}`);
+
                 break;
               }
             }
@@ -131,14 +129,6 @@ export class Proxy {
             break;
           }
         }
-        // if (type === 1) {
-        //   // idk
-        // } else if (type === 4) {
-        //   const tank = TankPacket.fromBuffer(data);
-        //   if (tank.data.type === 1) {
-        //     // peer.send(Variant.from("OnConsoleMessage", "Sucessfully connect with `4proxy"));
-        //   }
-        // }
         peer.send(data);
       })
       .listen();
