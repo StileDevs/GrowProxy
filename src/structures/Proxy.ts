@@ -35,6 +35,7 @@ export class Proxy {
         type2: false
       }
     });
+    this.client.toggleNewPacket();
 
     this.serverNetID = 0;
   }
@@ -65,6 +66,7 @@ export class Proxy {
         // console.log(`[${netID}] Proxy Received`, data.toString("hex").match(/../g).join(" "), "\n");
         const type = data.readUInt32LE(0);
         const peer = new Peer(this.server.client, this.serverNetID);
+        const peerProxy = new Peer(this.client, netID);
 
         switch (type) {
           case PacketTypes.ACTION: {
@@ -101,7 +103,10 @@ export class Proxy {
 
                 log
                   .getLogger(`${VariantTypes[variant[0].type]} | VariantList`)
-                  .info("\n", variant.map((v) => `[${v.index}]: ${v.value}`).join("\n"));
+                  .info(
+                    "\n",
+                    variant.map((v) => `[${v.index} | ${v.typeName}]: ${v.value}`).join("\n")
+                  );
 
                 if (variant[0].typeName === "STRING" && variant[0].value === "OnConsoleMessage") {
                   const newText = `\`4[PROXY]\`\` ${variant[1].value}`;
@@ -114,6 +119,27 @@ export class Proxy {
 
                   const parsed = parseText(obj);
                   data = Variant.from({ delay: -1 }, "OnSpawn", parsed).parse().parse();
+                } else if (
+                  variant[0].typeName === "STRING" &&
+                  variant[0].value === "OnSendToServer"
+                ) {
+                  let obj = parseTextToObj(variant[4].value as string);
+                  const tokenize = obj[Object.keys(obj)[0]] as string[];
+
+                  // console.log(this.toFullBuffer(data));
+                  data = Variant.from(
+                    { delay: -1 },
+                    "OnSendToServer",
+                    // this.server.port,
+                    17094,
+                    // variant[1].value,
+                    variant[2].value,
+                    variant[3].value,
+                    `127.0.0.1|${tokenize[0]}|${tokenize[1]}`,
+                    variant[5].value
+                  )
+                    .parse()
+                    .parse();
                 }
 
                 break;
@@ -129,6 +155,7 @@ export class Proxy {
             break;
           }
         }
+
         peer.send(data);
       })
       .listen();

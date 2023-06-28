@@ -20,7 +20,7 @@ log4js.configure({
   }
 });
 
-const proxy = new Proxy("0.0.0.0", 17093);
+const proxy = new Proxy("127.0.0.1", 17093);
 const server = new Server("127.0.0.1", 17094);
 
 proxy.setServer(server);

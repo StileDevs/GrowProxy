@@ -31,16 +31,17 @@ export class Server {
         port,
         maxPeers: 1024,
         useNewPacket: {
-          asClient: true
+          asClient: false
         }
       },
       https: {
         port,
-        enable: false,
+        enable: true,
         ip,
-        type2: false
+        type2: true
       }
     });
+    this.client.toggleNewPacket();
 
     this.config = JSON.parse(readFileSync("./config.json", "utf8"));
     this.proxyNetID = 0;
@@ -76,8 +77,9 @@ export class Server {
         this.setMeta(req.meta as string);
         if (
           this.proxy.client.connect(
-            req.server as string,
-            parseInt(req.port as string),
+            (req.server as string).replace(/(\r)/gm, ""),
+            // "213.179.209.168",
+            parseInt((req.port as string).replace(/(\r)/gm, "")),
             // 17091,
             this.proxyNetID
           )
@@ -87,6 +89,7 @@ export class Server {
       .on("raw", (netID, data) => {
         const type = data.readUInt32LE(0);
         const peerProxy = new Peer(this.proxy.client, this.proxyNetID);
+        const peer = new Peer(this.client, this.proxy.serverNetID);
 
         switch (type) {
           case PacketTypes.ACTION: {
@@ -112,9 +115,16 @@ export class Server {
               strObj.country = "jp";
             }
 
+            const buf = Buffer.alloc(4 + str.length);
+            buf.writeUint32LE(2, 0);
+            buf.write(parseText(strObj), 4);
+
+            console.log(this.toFullBuffer(buf));
+            data = buf;
+
             log
               .getLogger(ansi.cyan(`STRING`))
-              .info(`[${netID}] Proxy Received\n`, data.subarray(4).toString());
+              .info(`[${netID}] Server Received\n`, data.subarray(4).toString());
             break;
           }
 
@@ -122,11 +132,16 @@ export class Server {
             const tankType = data.readUint8(4);
             log
               .getLogger(ansi.blueBright(`TANK | Length: ${data.length}`))
-              .info(`[${netID}] Proxy Received ${TankTypes[tankType]}`);
+              .info(`[${netID}] Server Received ${TankTypes[tankType]}`);
 
             switch (tankType) {
               case TankTypes.SEND_ITEM_DATABASE_DATA: {
                 // ignore
+                break;
+              }
+
+              case TankTypes.DISCONNECT: {
+                // peerProxy.send(data);
                 break;
               }
 
