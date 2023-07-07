@@ -17,6 +17,13 @@ export class Proxy {
   public client: Client;
   public serverNetID: number;
   public server: Server;
+  public onsendserver: {
+    ip: string;
+    port: number;
+    token: number;
+    UUIDToken: string;
+    doorID: string;
+  };
 
   constructor(public ip: string, public port: number) {
     this.client = new Client({
@@ -35,7 +42,7 @@ export class Proxy {
         type2: false
       }
     });
-    this.client.toggleNewPacket();
+    // this.client.toggleNewPacket();
 
     this.serverNetID = 0;
   }
@@ -46,6 +53,16 @@ export class Proxy {
 
   public setServer(server: Server) {
     this.server = server;
+  }
+
+  public setOnSend(obj: {
+    ip: string;
+    port: number;
+    token: number;
+    UUIDToken: string;
+    doorID: string;
+  }) {
+    this.onsendserver = obj;
   }
 
   public toFullBuffer(data: Buffer) {
@@ -62,19 +79,28 @@ export class Proxy {
 
         this.server.setProxyNetID(netID);
       })
+      .on("disconnect", (netID) => {
+        console.log(`Proxy disconnect`, netID);
+      })
       .on("raw", (netID, data) => {
-        // console.log(`[${netID}] Proxy Received`, data.toString("hex").match(/../g).join(" "), "\n");
+        console.log(`[${netID}] Proxy Received`, this.toFullBuffer(data), "\n");
         const type = data.readUInt32LE(0);
         const peer = new Peer(this.server.client, this.serverNetID);
         const peerProxy = new Peer(this.client, netID);
 
         switch (type) {
+          case PacketTypes.HELLO: {
+            peer.send(data);
+            break;
+          }
+
           case PacketTypes.ACTION: {
-            const parsed = parseTextToObj(data);
+            const parsed = parseTextToObj(data.subarray(4));
 
             log
               .getLogger(ansi.yellowBright("ACTION"))
               .info(`[${netID}] Proxy Received\n${data.subarray(4).toString()}`);
+            peer.send(data);
             break;
           }
 
@@ -82,6 +108,7 @@ export class Proxy {
             log
               .getLogger(ansi.cyan(`STRING`))
               .info(`[${netID}] Proxy Received\n`, data.subarray(4).toString());
+            peer.send(data);
             break;
           }
 
@@ -95,6 +122,7 @@ export class Proxy {
             switch (tankType) {
               case TankTypes.SEND_ITEM_DATABASE_DATA: {
                 // ignore
+                peer.send(data);
                 break;
               }
 
@@ -127,26 +155,37 @@ export class Proxy {
                   const tokenize = obj[Object.keys(obj)[0]] as string[];
 
                   // console.log(this.toFullBuffer(data));
+                  this.setOnSend({
+                    ip: Object.keys(obj)[0],
+                    port: variant[1].value as number,
+                    token: variant[2].value as number,
+                    doorID: tokenize[0],
+                    UUIDToken: tokenize[1]
+                  });
                   data = Variant.from(
-                    { delay: -1 },
                     "OnSendToServer",
-                    // this.server.port,
-                    17094,
+                    this.server.port,
+                    // 17094,
                     // variant[1].value,
                     variant[2].value,
                     variant[3].value,
                     `127.0.0.1|${tokenize[0]}|${tokenize[1]}`,
+                    // `${Object.keys(obj)[0]}|${tokenize[0]}|${tokenize[1]}`,
                     variant[5].value
                   )
                     .parse()
                     .parse();
                 }
+                // peerProxy.send(data);
+                peer.send(data);
 
                 break;
               }
 
               default: {
                 log.getLogger(`${TankTypes[tankType]}`).info(`${this.toFullBuffer(data)}`);
+
+                peer.send(data);
 
                 break;
               }
@@ -156,7 +195,7 @@ export class Proxy {
           }
         }
 
-        peer.send(data);
+        // peer.send(data);
       })
       .listen();
   }
