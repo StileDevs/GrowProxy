@@ -17,7 +17,7 @@ export class Proxy {
   public client: Client;
   public serverNetID: number;
   public server: Server;
-  public onsendserver: {
+  public onsendserver?: {
     ip: string;
     port: number;
     token: number;
@@ -42,7 +42,8 @@ export class Proxy {
         type2: false
       }
     });
-    // this.client.toggleNewPacket();
+
+    if (this.client.config.enet.useNewPacket.asClient) this.client.toggleNewPacket();
 
     this.serverNetID = 0;
   }
@@ -75,7 +76,7 @@ export class Proxy {
         log.getLogger("READY").info("Proxy Ready!");
       })
       .on("connect", (netID) => {
-        log.getLogger("CONNECT").info(`New Peer connected to Proxy: ${netID}`);
+        log.getLogger("CONNECT").info(`Proxy successfully connect`);
 
         this.server.setProxyNetID(netID);
       })

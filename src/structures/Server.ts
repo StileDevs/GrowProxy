@@ -24,6 +24,7 @@ export class Server {
   public meta: string;
   public config: ProxyConfig;
   public proxy: Proxy;
+  public klv?: string;
 
   constructor(public ip: string, public port: number) {
     this.client = new Client({
@@ -60,6 +61,10 @@ export class Server {
     this.meta = meta;
   }
 
+  public setKlv(klv: string) {
+    this.klv = klv;
+  }
+
   public toFullBuffer(data: Buffer) {
     return data.toString("hex").match(/../g).join(" ");
   }
@@ -70,23 +75,38 @@ export class Server {
         log.getLogger("READY").info("Server Ready!");
       })
       .on("connect", async (netID) => {
-        log.getLogger("CONNECT").info(`New Client connected to server: ${netID}`);
+        log
+          .getLogger("CONNECT")
+          .info(`New Client connected to server: ${netID} ProxyID: ${this.proxyNetID}`);
 
         this.proxy.setServerNetID(netID);
         const req = await this.request();
-        console.log(req);
+        // console.log({
+        //   req,
+        //   peerID: this.proxyNetID,
+        //   port: parseInt((req.port as string).replace(/(\r)/gm, ""))
+        // });
 
-        this.setMeta((req.meta as string).replace(/(\r)/gm, ""));
-        if (
-          this.proxy.client.connect(
-            (req.server as string).replace(/(\r)/gm, ""),
-            // "213.179.209.168",
-            parseInt((req.port as string).replace(/(\r)/gm, "")),
-            // 17091,
-            this.proxyNetID
-          )
-        )
-          log.getLogger("CONNECT").info(`Successfully proxy connect to ${req.server}`);
+        if (!this.proxy.onsendserver) this.setMeta((req.meta as string).replace(/(\r)/gm, ""));
+        // this.setMeta((req.meta as string).replace(/(\r)/gm, ""));
+        const connected = this.proxy.client.connect(
+          (req["server"] as string).replace(/(\r)/gm, ""),
+          // "213.179.209.168",
+          this.proxy.onsendserver
+            ? this.proxy.onsendserver.port
+            : parseInt((req.port as string).replace(/(\r)/gm, "")),
+          // 17186,
+          this.proxyNetID
+        );
+
+        if (connected)
+          log
+            .getLogger("CONNECT")
+            .info(
+              `Connecting proxy to ${req.server}:${
+                this.proxy.onsendserver ? this.proxy.onsendserver.port : req.port
+              }`
+            );
       })
       .on("raw", (netID, data) => {
         console.log(`[${netID}] Server Received`, this.toFullBuffer(data), "\n");
@@ -99,12 +119,14 @@ export class Server {
             const parsed = parseTextToObj(data);
 
             if ((parsed.action as string).replace(/\x00/gm, "") === "quit") {
-              this.client._client.disconnect(netID);
+              if (this.proxyNetID > -1) this.proxy.client._client.disconnect(this.proxyNetID);
             }
 
             log
               .getLogger(ansi.yellowBright("ACTION"))
               .info(`[${netID}] Server Received\n`, data.subarray(4).toString());
+
+            peerProxy.send(data);
 
             break;
           }
@@ -123,19 +145,23 @@ export class Server {
 
               strObj.meta = this.meta;
               strObj.country = "jp";
-              // strObj.klv = klv;
+              if (!this.klv) this.setKlv(strObj.klv as string);
+              strObj.klv = this.klv;
             }
 
             const buf = Buffer.alloc(4 + str.length);
             buf.writeUint32LE(2, 0);
             buf.write(parseText(strObj), 4);
 
-            console.log(this.toFullBuffer(buf));
+            // console.log(this.toFullBuffer(buf));
             data = buf;
 
             log
               .getLogger(ansi.cyan(`STRING`))
               .info(`[${netID}] Server Received\n`, data.subarray(4).toString());
+
+            peerProxy.send(data);
+
             break;
           }
 
@@ -148,11 +174,18 @@ export class Server {
             switch (tankType) {
               case TankTypes.SEND_ITEM_DATABASE_DATA: {
                 // ignore
+                peerProxy.send(data);
+
                 break;
               }
 
               case TankTypes.DISCONNECT: {
-                peerProxy.send(data);
+                console.log(TankPacket.fromBuffer(data));
+                // peerProxy.send(data);
+                // this.proxy.client._client.disconnectNow(this.proxyNetID);
+                this.proxy.client._client.disconnect(this.proxyNetID);
+                this.client._client.disconnect(netID);
+                // this.client._client.disconnectNow(netID);
                 break;
               }
 
@@ -162,12 +195,15 @@ export class Server {
                 log
                   .getLogger(`${VariantTypes[variant[0].type]} | VariantList`)
                   .info("\n", variant.map((v) => `[${v.index}]: ${v.value}`).join("\n"));
+                peerProxy.send(data);
 
                 break;
               }
 
               default: {
                 log.getLogger(`${TankTypes[tankType]}`).info(`${this.toFullBuffer(data)}`);
+                peerProxy.send(data);
+
                 break;
               }
             }
@@ -175,7 +211,6 @@ export class Server {
             break;
           }
         }
-        peerProxy.send(data);
       })
       .on("disconnect", (netID) => {
         console.log("Client disconnected", netID);
@@ -185,14 +220,21 @@ export class Server {
   }
 
   private async request() {
+    // const ip = await axios({
+    //   method: "GET",
+    //   url: "https://dns.google/resolve?name=www.growtopia1.com&type=A"
+    // });
+    // console.log({ ip });
     const res = await axios({
       method: "POST",
-      url: `https://${this.config.server.host}/growtopia/server_data.php`,
+      url: `https://36.91.215.216/growtopia/server_data.php?platform=0&protocol=201&version=4.47`,
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
         Accept: "*/*",
-        "User-Agent": "UbiServices_SDK_2019.Release.27_PC64_unicode_static"
+        "User-Agent": "UbiServices_SDK_2022.Release.9_PC64_ansi_static",
+        Host: "www.growtopia1.com"
       },
+      data: "version=4.47&platform=0&protocol=201",
       httpsAgent: new https.Agent({
         rejectUnauthorized: false
       })
