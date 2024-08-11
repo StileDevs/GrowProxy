@@ -1,29 +1,16 @@
-import {
-  Client,
-  TextPacket,
-  Peer,
-  TankPacket,
-  Variant,
-  PacketTypes,
-  TankTypes,
-  VariantTypes
-} from "growtopia.js";
-import { Server } from "./Server";
+import { Client, TextPacket, Peer, TankPacket, Variant } from "growtopia.js";
+import { Server } from "./Server.js";
 import ansi from "ansi-colors";
-import { parseText, parseTextToObj } from "./Utils";
 import log from "log4js";
+import { PacketTypes, VariantTypes } from "../enums/Data.js";
+import { TankTypes } from "../enums/Tank.js";
+import { TextParser } from "./Utils.js";
 
 export class Proxy {
   public client: Client;
   public serverNetID: number;
   public server: Server;
-  public onsendserver?: {
-    ip: string;
-    port: number;
-    token: number;
-    UUIDToken: string;
-    doorID: string;
-  };
+  public onsendserver: boolean;
 
   constructor(public ip: string, public port: number) {
     this.client = new Client({
@@ -37,7 +24,7 @@ export class Proxy {
       },
       https: {
         ip,
-        port,
+        enetPort: port,
         enable: false,
         type2: false
       }
@@ -46,6 +33,7 @@ export class Proxy {
     if (this.client.config.enet.useNewPacket.asClient) this.client.toggleNewPacket();
 
     this.serverNetID = 0;
+    this.onsendserver = false;
   }
 
   public setServerNetID(netID: number) {
@@ -56,18 +44,16 @@ export class Proxy {
     this.server = server;
   }
 
-  public setOnSend(obj: {
-    ip: string;
-    port: number;
-    token: number;
-    UUIDToken: string;
-    doorID: string;
-  }) {
-    this.onsendserver = obj;
+  public setOnSend(bool: boolean) {
+    this.onsendserver = bool;
   }
 
   public toFullBuffer(data: Buffer) {
     return data.toString("hex").match(/../g).join(" ");
+  }
+
+  public disconnectSelf() {
+    this.client._client.disconnectNow(this.server.proxyNetID);
   }
 
   public start() {
@@ -96,7 +82,8 @@ export class Proxy {
           }
 
           case PacketTypes.ACTION: {
-            const parsed = parseTextToObj(data.subarray(4));
+            const parsed = new TextParser(data.subarray(4).toString("utf-8"));
+            console.log(parsed.data);
 
             log
               .getLogger(ansi.yellowBright("ACTION"))
@@ -121,12 +108,6 @@ export class Proxy {
               .info(`[${netID}] Proxy Received ${TankTypes[tankType]}`);
 
             switch (tankType) {
-              case TankTypes.SEND_ITEM_DATABASE_DATA: {
-                // ignore
-                peer.send(data);
-                break;
-              }
-
               case TankTypes.CALL_FUNCTION: {
                 const variant = Variant.toArray(data);
 
@@ -142,41 +123,31 @@ export class Proxy {
 
                   data = Variant.from("OnConsoleMessage", newText).parse().parse();
                 } else if (variant[0].typeName === "STRING" && variant[0].value === "OnSpawn") {
-                  let obj = parseTextToObj(variant[1].value as string);
-                  obj.mstate = "1";
-                  obj.smstate = "0";
+                  const obj = new TextParser(variant[1].value as string);
+                  obj.set("mstate", "1");
+                  obj.set("smstate", "0");
 
-                  const parsed = parseText(obj);
-                  data = Variant.from({ delay: -1 }, "OnSpawn", parsed).parse().parse();
+                  data = Variant.from({ delay: -1 }, "OnSpawn", obj.toString()).parse().parse();
                 } else if (
                   variant[0].typeName === "STRING" &&
                   variant[0].value === "OnSendToServer"
                 ) {
-                  let obj = parseTextToObj(variant[4].value as string);
-                  const tokenize = obj[Object.keys(obj)[0]] as string[];
+                  const tokenize = (variant[4].value as string).split("|");
 
-                  // console.log(this.toFullBuffer(data));
-                  this.setOnSend({
-                    ip: Object.keys(obj)[0],
-                    port: variant[1].value as number,
-                    token: variant[2].value as number,
-                    doorID: tokenize[0],
-                    UUIDToken: tokenize[1]
-                  });
                   data = Variant.from(
                     "OnSendToServer",
                     this.server.port,
-                    // 17094,
-                    // variant[1].value,
                     variant[2].value,
                     variant[3].value,
-                    `127.0.0.1|${tokenize[0]}|${tokenize[1]}`,
-                    // `${Object.keys(obj)[0]}|${tokenize[0]}|${tokenize[1]}`,
+                    `127.0.0.1|${tokenize[1]}|${tokenize[2]}`,
                     variant[5].value
                   )
                     .parse()
                     .parse();
                 }
+
+                this.server.setDestPort(`${variant[1].value}`);
+                this.setOnSend(true);
                 // peerProxy.send(data);
                 peer.send(data);
 
@@ -191,6 +162,17 @@ export class Proxy {
                 break;
               }
             }
+            // switch (tankType) {
+            //   case TankTypes.SEND_ITEM_DATABASE_DATA: {
+            //     // ignore
+            //     peer.send(data);
+            //     break;
+            //   }
+
+            //   case TankTypes.CALL_FUNCTION: {
+
+            //     break;
+            //   }
 
             break;
           }

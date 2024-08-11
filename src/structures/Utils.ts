@@ -1,43 +1,40 @@
-export interface DataObject {
-  [key: string | number]: string | string[] | number;
-}
+export class TextParser {
+  public data: { [key: string]: string };
 
-export function parseText(obj: DataObject) {
-  return Object.entries(obj)
-    .map(([key, value]) => `${key}|${Array.isArray(value) ? value.join("|") : value}`)
-    .join("\n");
-}
-
-export function parseTextToObj(chunk: Buffer | string) {
-  let data: DataObject = {};
-  let str: string;
-
-  if (Buffer.isBuffer(chunk)) {
-    chunk[chunk.length - 1] = 0;
-    str = chunk.toString("utf-8", 4);
-  } else {
-    str = chunk;
+  constructor(input: string) {
+    this.data = {};
+    this.parse(input);
   }
 
-  str.split("\n").forEach((line) => {
-    const [key, ...values] = line.split("|");
-    data[key] = values.length > 1 ? values : values[0];
-  });
+  private parse(input: string) {
+    const lines = input.split("\n");
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (!trimmedLine || trimmedLine.startsWith("#")) continue; // Skip empty lines and comments
+      const [key, value] = trimmedLine.split("|");
+      if (key && value) {
+        this.data[key] = value;
+      }
+    }
+  }
 
-  // const lines = str.split("\n");
+  public get(key: string): string | undefined {
+    return this.data[key];
+  }
 
-  // lines.forEach((line) => {
-  //   if (line.startsWith("|")) line = line.slice(1);
-  //   const info = line.split("|");
+  public set(key: string, value: string): void {
+    this.data[key] = value;
+  }
 
-  //   let key = info[0];
-  //   let val = info[1];
+  public delete(key: string): void {
+    delete this.data[key];
+  }
 
-  //   if (key && val) {
-  //     if (val.endsWith("\x00")) val = val.slice(0, -1);
-  //     data[key] = val;
-  //   }
-  // });
+  public toString(endMarker = false): string {
+    const entries = Object.entries(this.data)
+      .map(([key, value]) => `${key}|${value}`)
+      .join("\n");
 
-  return data;
+    return `${entries}${endMarker ? "\nRTENDMARKERBS1001" : ""}`;
+  }
 }

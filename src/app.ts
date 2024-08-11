@@ -1,6 +1,7 @@
-import { Proxy } from "./structures/Proxy";
-import { Server } from "./structures/Server";
+import { Proxy } from "./structures/Proxy.js";
+import { Server } from "./structures/Server.js";
 import log4js from "log4js";
+import { Web } from "./structures/Web.js";
 
 log4js.configure({
   appenders: {
@@ -28,3 +29,4 @@ server.setProxy(proxy);
 
 proxy.start();
 server.start();
+Web(proxy, server);
