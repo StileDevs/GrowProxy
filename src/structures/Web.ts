@@ -30,7 +30,7 @@ export function Web(proxy: Proxy, server: Server) {
     const answer = growtopia.data.Answer;
     const ip = answer[answer.length - 1].data as string;
 
-    log.getLogger(`Requesting ${ip}`);
+    log.getLogger(`REQUEST`).info(`Fetching ${ip}`);
     const result = await axios({
       method: "POST",
       url: `https://${ip}/growtopia/server_data.php?platform=${body.platform}&protocol=${body.protocol}&version=${body.version}`,

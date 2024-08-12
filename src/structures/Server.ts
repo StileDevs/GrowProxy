@@ -17,6 +17,7 @@ export class Server {
   public meta: string;
   public klv: string;
   public destPort: string;
+  public destIP: string;
 
   constructor(public ip: string, public port: number) {
     this.client = new Client({
@@ -61,6 +62,10 @@ export class Server {
     this.destPort = port;
   }
 
+  public setDestIP(ip: string) {
+    this.destIP = ip;
+  }
+
   public toFullBuffer(data: Buffer) {
     return data.toString("hex").match(/../g).join(" ");
   }
@@ -71,9 +76,6 @@ export class Server {
         log.getLogger("READY").info("Server Ready!");
       })
       .on("connect", async (netID) => {
-        console.log(this);
-        // const peer = new Peer(this.client, this.proxy.serverNetID);
-
         log
           .getLogger("CONNECT")
           .info(`New Client connected to server: ${netID} ProxyID: ${this.proxyNetID}`);
@@ -83,34 +85,34 @@ export class Server {
         if (this.proxy.onsendserver) {
           const peerProxy = new Peer(this.proxy.client, this.proxyNetID);
 
-          console.log(peerProxy.data.enet.getState());
-
           const connected = this.proxy.client.connect(
-            "213.179.209.168",
+            this.destIP,
             parseInt(this.destPort),
             this.proxyNetID
           );
-          if (connected) log.getLogger("CONNECT").info(`Connecting proxy to 213.179.209.168`);
+          if (connected)
+            log
+              .getLogger("CONNECT")
+              .info(`Connecting proxy to sub-server ${this.destIP}:${this.destPort}`);
         } else {
           const connected = this.proxy.client.connect(
             "213.179.209.168",
             parseInt(this.destPort),
             this.proxyNetID
           );
-          if (connected) log.getLogger("CONNECT").info(`Connecting proxy to 213.179.209.168`);
+          if (connected)
+            log.getLogger("CONNECT").info(`Connecting proxy to 213.179.209.168:${this.destPort}`);
         }
       })
       .on("raw", (netID, data) => {
-        console.log(`[${netID}] Server Received`, this.toFullBuffer(data), "\n");
         const type = data.readUInt32LE(0);
+        console.log(`[${netID}] Server Received`, this.toFullBuffer(data), "\n");
         const peerProxy = new Peer(this.proxy.client, this.proxyNetID);
         const peer = new Peer(this.client, this.proxy.serverNetID);
 
         switch (type) {
           case PacketTypes.ACTION: {
             const parsed = new TextParser(data.toString("utf-8"));
-
-            console.log(parsed);
 
             // if ((parsed.action as string).replace(/\x00/gm, "") === "quit") {
             //   if (this.proxyNetID > -1) this.proxy.client._client.disconnect(this.proxyNetID);
@@ -120,47 +122,15 @@ export class Server {
             //   .getLogger(ansi.yellowBright("ACTION"))
             //   .info(`[${netID}] Server Received\n`, data.subarray(4).toString());
 
-            // peerProxy.send(data);
+            peerProxy.send(data);
 
             break;
           }
 
           case PacketTypes.STR: {
             const obj = new TextParser(data.subarray(4).toString("utf-8"));
-            console.log(obj.data);
 
             peerProxy.send(data);
-
-            /*
-
-            if (strObj["requestedName"]) {
-              const klv = this.generate_klv(
-                parseInt(strObj.protocol as string),
-                strObj.game_version as string,
-                strObj.rid as string
-              );
-              // console.log("klv", klv);
-
-              strObj.meta = this.meta;
-              // strObj.country = "jp";
-              if (!this.klv) this.setKlv(strObj.klv as string);
-              strObj.klv = this.klv;
-            }
-
-            console.log(strObj);
-            const buf = Buffer.alloc(4 + str.length);
-            buf.writeUint32LE(2, 0);
-            buf.write(parseText(strObj), 4);
-
-            // console.log(this.toFullBuffer(buf));
-            data = buf;
-
-            log
-              .getLogger(ansi.cyan(`STRING`))
-              .info(`[${netID}] Server Received\n`, data.subarray(4).toString());
-
-            peerProxy.send(data);
-            */
             break;
           }
 
@@ -168,7 +138,9 @@ export class Server {
             const tankType = data.readUint8(4);
             log
               .getLogger(ansi.blueBright(`TANK | Length: ${data.length}`))
-              .info(`[${netID}] Server Received ${TankTypes[tankType]}`);
+              .info(
+                `[${netID}] Server Received ${TankTypes[tankType]}\n${this.toFullBuffer(data)}`
+              );
 
             switch (tankType) {
               case TankTypes.SEND_ITEM_DATABASE_DATA: {
@@ -185,8 +157,8 @@ export class Server {
                 // this.proxy.disconnectSelf();
 
                 peer.send(data);
-                peerProxy.send(data);
                 peer.disconnect("now");
+                peerProxy.send(data);
                 peerProxy.disconnect("now");
 
                 // peerProxy.disconnect("normal");
@@ -200,9 +172,8 @@ export class Server {
 
                 log
                   .getLogger(`${VariantTypes[variant[0].type]} | VariantList`)
-                  .info("\n", variant.map((v) => `[${v.index}]: ${v.value}`).join("\n"));
+                  .info(`\n${variant.map((v) => `[${v.index}]: ${v.value}`).join("\n")}`);
                 peerProxy.send(data);
-
                 break;
               }
 
@@ -219,7 +190,7 @@ export class Server {
         }
       })
       .on("disconnect", (netID) => {
-        console.log("Client disconnected", netID);
+        log.getLogger("DISCONNECT").info("Client disconnected", netID);
         this.proxy.client._client.disconnect(this.proxyNetID);
       })
       .listen();

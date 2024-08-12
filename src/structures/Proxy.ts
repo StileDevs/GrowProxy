@@ -67,14 +67,13 @@ export class Proxy {
         this.server.setProxyNetID(netID);
       })
       .on("disconnect", (netID) => {
-        console.log(`Proxy disconnect`, netID);
+        log.getLogger("DISCONNECT").info(`Proxy disconnect`, netID);
       })
       .on("raw", (netID, data) => {
-        console.log(`[${netID}] Proxy Received`, this.toFullBuffer(data), "\n");
         const type = data.readUInt32LE(0);
+        console.log(`[${netID}] Proxy Received`, this.toFullBuffer(data), "\n");
         const peer = new Peer(this.server.client, this.serverNetID);
         const peerProxy = new Peer(this.client, netID);
-
         switch (type) {
           case PacketTypes.HELLO: {
             peer.send(data);
@@ -83,11 +82,14 @@ export class Proxy {
 
           case PacketTypes.ACTION: {
             const parsed = new TextParser(data.subarray(4).toString("utf-8"));
-            console.log(parsed.data);
 
             log
               .getLogger(ansi.yellowBright("ACTION"))
-              .info(`[${netID}] Proxy Received\n${data.subarray(4).toString()}`);
+              .info(
+                `[${netID}] Proxy Received\n${data.subarray(4).toString()}\n${this.toFullBuffer(
+                  data
+                )}`
+              );
             peer.send(data);
             break;
           }
@@ -95,7 +97,11 @@ export class Proxy {
           case PacketTypes.STR: {
             log
               .getLogger(ansi.cyan(`STRING`))
-              .info(`[${netID}] Proxy Received\n`, data.subarray(4).toString());
+              .info(
+                `[${netID}] Proxy Received\n${data.subarray(4).toString()}\n${this.toFullBuffer(
+                  data
+                )}`
+              );
             peer.send(data);
             break;
           }
@@ -105,7 +111,7 @@ export class Proxy {
 
             log
               .getLogger(ansi.blueBright(`TANK | Length: ${data.length}`))
-              .info(`[${netID}] Proxy Received ${TankTypes[tankType]}`);
+              .info(`[${netID}] Proxy Received ${TankTypes[tankType]}\n${this.toFullBuffer(data)}`);
 
             switch (tankType) {
               case TankTypes.CALL_FUNCTION: {
@@ -123,11 +129,11 @@ export class Proxy {
 
                   data = Variant.from("OnConsoleMessage", newText).parse().parse();
                 } else if (variant[0].typeName === "STRING" && variant[0].value === "OnSpawn") {
-                  const obj = new TextParser(variant[1].value as string);
-                  obj.set("mstate", "1");
-                  obj.set("smstate", "0");
-
-                  data = Variant.from({ delay: -1 }, "OnSpawn", obj.toString()).parse().parse();
+                  // const obj = new TextParser(variant[1].value as string);
+                  // obj.set("mstate", "1");
+                  // obj.set("smstate", "0");
+                  // console.log(obj.data, variant);
+                  // data = Variant.from({ delay: -1 }, "OnSpawn", obj.toString()).parse().parse();
                 } else if (
                   variant[0].typeName === "STRING" &&
                   variant[0].value === "OnSendToServer"
@@ -144,10 +150,11 @@ export class Proxy {
                   )
                     .parse()
                     .parse();
+                  this.server.setDestIP(tokenize[0]);
+                  this.server.setDestPort(`${variant[1]?.value}`);
+                  this.setOnSend(true);
                 }
 
-                this.server.setDestPort(`${variant[1].value}`);
-                this.setOnSend(true);
                 // peerProxy.send(data);
                 peer.send(data);
 
