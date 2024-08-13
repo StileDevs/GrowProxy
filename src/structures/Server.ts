@@ -112,7 +112,7 @@ export class Server {
 
         switch (type) {
           case PacketTypes.ACTION: {
-            const obj = new TextParser(data.toString("utf-8"));
+            const obj = new TextParser(data.subarray(4).toString("utf-8"));
 
             log.getLogger(`ACTION`).info(`Incoming Action from proxy:\n`, obj.data, "\n");
 

@@ -7,9 +7,11 @@ export class TextParser {
   }
 
   private parse(input: string) {
-    input.split("\n").forEach((line) => {
+    const lines = input.split("\n");
+
+    lines.forEach((line, i) => {
       const [key, ...values] = line.split("|");
-      this.data[key] = values.length > 1 ? values : values[0];
+      this.data[key || `arr-${i}`] = values.length > 1 ? values : values[0];
     });
   }
 
