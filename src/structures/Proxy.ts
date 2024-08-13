@@ -128,10 +128,8 @@ export class Proxy {
                     case "OnSpawn": {
                       const obj = new TextParser(variant[1].value as string);
                       obj.set("mstate", "1");
-                      console.log("Original", variant[1].value);
-                      console.log("Changed", obj.data);
                       // obj.set("smstate", "0");
-                      // data = Variant.from({ delay: -1 }, "OnSpawn", obj.toString()).parse().parse();
+                      data = Variant.from({ delay: -1 }, "OnSpawn", obj.toString()).parse().parse();
                       peer.send(data);
                       break;
                     }

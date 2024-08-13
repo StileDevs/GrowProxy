@@ -1,5 +1,5 @@
 export class TextParser {
-  public data: { [key: string]: string };
+  public data: {};
 
   constructor(input: string) {
     this.data = {};
@@ -7,15 +7,10 @@ export class TextParser {
   }
 
   private parse(input: string) {
-    const lines = input.split("\n");
-    for (const line of lines) {
-      const trimmedLine = line.trim();
-      if (!trimmedLine || trimmedLine.startsWith("#")) continue; // Skip empty lines and comments
-      const [key, value] = trimmedLine.split("|");
-      if (key && value) {
-        this.data[key] = value;
-      }
-    }
+    input.split("\n").forEach((line) => {
+      const [key, ...values] = line.split("|");
+      this.data[key] = values.length > 1 ? values : values[0];
+    });
   }
 
   public get(key: string): string | undefined {
@@ -32,7 +27,7 @@ export class TextParser {
 
   public toString(endMarker = false): string {
     const entries = Object.entries(this.data)
-      .map(([key, value]) => `${key}|${value}`)
+      .map(([key, value]) => `${key}|${Array.isArray(value) ? value.join("|") : value}`)
       .join("\n");
 
     return `${entries}${endMarker ? "\nRTENDMARKERBS1001" : ""}`;
