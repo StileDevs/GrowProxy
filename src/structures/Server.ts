@@ -1,7 +1,6 @@
 import { Client, TextPacket, Peer, TankPacket, Variant } from "growtopia.js";
 import { Proxy } from "./Proxy.js";
 import { readFileSync } from "fs";
-import ansi from "ansi-colors";
 import { ProxyConfig } from "../types";
 import log from "log4js";
 import crypto from "crypto";
@@ -78,7 +77,7 @@ export class Server {
       .on("connect", async (netID) => {
         log
           .getLogger("CONNECT")
-          .info(`New Client connected to server: ${netID} ProxyID: ${this.proxyNetID}`);
+          .info(`New Client connected to server: ${netID} ProxyID: ${this.proxyNetID}`, "\n");
 
         this.proxy.setServerNetID(netID);
 
@@ -93,7 +92,7 @@ export class Server {
           if (connected)
             log
               .getLogger("CONNECT")
-              .info(`Connecting proxy to sub-server ${this.destIP}:${this.destPort}`);
+              .info(`Connecting proxy to sub-server ${this.destIP}:${this.destPort}`, "\n");
         } else {
           const connected = this.proxy.client.connect(
             "213.179.209.168",
@@ -101,26 +100,21 @@ export class Server {
             this.proxyNetID
           );
           if (connected)
-            log.getLogger("CONNECT").info(`Connecting proxy to 213.179.209.168:${this.destPort}`);
+            log
+              .getLogger("CONNECT")
+              .info(`Connecting proxy to 213.179.209.168:${this.destPort}`, "\n");
         }
       })
       .on("raw", (netID, data) => {
         const type = data.readUInt32LE(0);
-        console.log(`[${netID}] Server Received`, this.toFullBuffer(data), "\n");
         const peerProxy = new Peer(this.proxy.client, this.proxyNetID);
         const peer = new Peer(this.client, this.proxy.serverNetID);
 
         switch (type) {
           case PacketTypes.ACTION: {
-            const parsed = new TextParser(data.toString("utf-8"));
+            const obj = new TextParser(data.toString("utf-8"));
 
-            // if ((parsed.action as string).replace(/\x00/gm, "") === "quit") {
-            //   if (this.proxyNetID > -1) this.proxy.client._client.disconnect(this.proxyNetID);
-            // }
-
-            // log
-            //   .getLogger(ansi.yellowBright("ACTION"))
-            //   .info(`[${netID}] Server Received\n`, data.subarray(4).toString());
+            log.getLogger(`ACTION`).info(`Incoming Action from proxy:\n`, obj.data, "\n");
 
             peerProxy.send(data);
 
@@ -130,40 +124,55 @@ export class Server {
           case PacketTypes.STR: {
             const obj = new TextParser(data.subarray(4).toString("utf-8"));
 
+            log.getLogger(`STRING`).info(`Incoming String from proxy:\n`, obj.data, "\n");
             peerProxy.send(data);
             break;
           }
 
           case PacketTypes.TANK: {
             const tankType = data.readUint8(4);
-            log
-              .getLogger(ansi.blueBright(`TANK | Length: ${data.length}`))
-              .info(
-                `[${netID}] Server Received ${TankTypes[tankType]}\n${this.toFullBuffer(data)}`
-              );
 
             switch (tankType) {
               case TankTypes.SEND_ITEM_DATABASE_DATA: {
                 // ignore
-                peerProxy.send(data);
 
+                log
+                  .getLogger(`TANK`)
+                  .info(`Incoming TankType ${TankTypes[tankType]} from proxy:\nTOO LONG`, "\n");
+                peerProxy.send(data);
+                break;
+              }
+              case TankTypes.SEND_MAP_DATA: {
+                // ignore
+
+                log
+                  .getLogger(`TANK`)
+                  .info(`Incoming TankType ${TankTypes[tankType]} from proxy:\nTOO LONG`, "\n");
+                peerProxy.send(data);
+                break;
+              }
+
+              case TankTypes.STATE: {
+                // ignore, it spamming the console (might be implement a config for it)
+
+                peerProxy.send(data);
                 break;
               }
 
               case TankTypes.DISCONNECT: {
-                // peerProxy.send(data);
-                // this.proxy.client._client.disconnectNow(this.proxyNetID);
-
-                // this.proxy.disconnectSelf();
+                log
+                  .getLogger(`TANK`)
+                  .info(
+                    `Incoming TankType ${TankTypes[tankType]} from proxy:\n${this.toFullBuffer(
+                      data
+                    )}`,
+                    "\n"
+                  );
 
                 peer.send(data);
                 peer.disconnect("now");
                 peerProxy.send(data);
                 peerProxy.disconnect("now");
-
-                // peerProxy.disconnect("normal");
-                // peer.disconnect("normal");
-
                 break;
               }
 
@@ -171,14 +180,26 @@ export class Server {
                 const variant = Variant.toArray(data);
 
                 log
-                  .getLogger(`${VariantTypes[variant[0].type]} | VariantList`)
-                  .info(`\n${variant.map((v) => `[${v.index}]: ${v.value}`).join("\n")}`);
+                  .getLogger(`TANK`)
+                  .info(
+                    `Incoming VariantList from proxy:\n${variant
+                      .map((v) => `[${v.typeName}]: ${v.value}`)
+                      .join("\n")}`,
+                    "\n"
+                  );
                 peerProxy.send(data);
                 break;
               }
 
               default: {
-                log.getLogger(`${TankTypes[tankType]}`).info(`${this.toFullBuffer(data)}`);
+                log
+                  .getLogger(`TANK`)
+                  .info(
+                    `Incoming TankType ${TankTypes[tankType]} from proxy:\n${this.toFullBuffer(
+                      data
+                    )}`,
+                    "\n"
+                  );
                 peerProxy.send(data);
 
                 break;
@@ -187,10 +208,23 @@ export class Server {
 
             break;
           }
+
+          default: {
+            log
+              .getLogger(`PACKET`)
+              .info(
+                `Incoming UnknownPacket ${PacketTypes[type]} from proxy:\n${this.toFullBuffer(
+                  data
+                )}`,
+                "\n"
+              );
+            peerProxy.send(data);
+            break;
+          }
         }
       })
       .on("disconnect", (netID) => {
-        log.getLogger("DISCONNECT").info("Client disconnected", netID);
+        log.getLogger("DISCONNECT").info("Client disconnected", netID, "\n");
         this.proxy.client._client.disconnect(this.proxyNetID);
       })
       .listen();

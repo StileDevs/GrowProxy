@@ -1,6 +1,5 @@
 import { Client, TextPacket, Peer, TankPacket, Variant } from "growtopia.js";
 import { Server } from "./Server.js";
-import ansi from "ansi-colors";
 import log from "log4js";
 import { PacketTypes, VariantTypes } from "../enums/Data.js";
 import { TankTypes } from "../enums/Tank.js";
@@ -62,46 +61,40 @@ export class Proxy {
         log.getLogger("READY").info("Proxy Ready!");
       })
       .on("connect", (netID) => {
-        log.getLogger("CONNECT").info(`Proxy successfully connect`);
+        log.getLogger("CONNECT").info(`Proxy successfully connect`, "\n");
 
         this.server.setProxyNetID(netID);
       })
       .on("disconnect", (netID) => {
-        log.getLogger("DISCONNECT").info(`Proxy disconnect`, netID);
+        log.getLogger("DISCONNECT").info(`Proxy disconnect`, netID, "\n");
       })
       .on("raw", (netID, data) => {
         const type = data.readUInt32LE(0);
-        console.log(`[${netID}] Proxy Received`, this.toFullBuffer(data), "\n");
         const peer = new Peer(this.server.client, this.serverNetID);
         const peerProxy = new Peer(this.client, netID);
+
         switch (type) {
           case PacketTypes.HELLO: {
+            log
+              .getLogger(`HELLO`)
+              .info(`Incoming HelloPacket from server:\n${this.toFullBuffer(data)}`, "\n");
+
             peer.send(data);
             break;
           }
 
           case PacketTypes.ACTION: {
-            const parsed = new TextParser(data.subarray(4).toString("utf-8"));
+            const obj = new TextParser(data.subarray(4).toString("utf-8"));
 
-            log
-              .getLogger(ansi.yellowBright("ACTION"))
-              .info(
-                `[${netID}] Proxy Received\n${data.subarray(4).toString()}\n${this.toFullBuffer(
-                  data
-                )}`
-              );
+            log.getLogger(`ACTION`).info(`Incoming Action from server:\n`, obj.data, "\n");
             peer.send(data);
             break;
           }
 
           case PacketTypes.STR: {
-            log
-              .getLogger(ansi.cyan(`STRING`))
-              .info(
-                `[${netID}] Proxy Received\n${data.subarray(4).toString()}\n${this.toFullBuffer(
-                  data
-                )}`
-              );
+            const obj = new TextParser(data.subarray(4).toString("utf-8"));
+
+            log.getLogger(`STRING`).info(`Incoming String from server:\n`, obj.data, "\n");
             peer.send(data);
             break;
           }
@@ -109,83 +102,119 @@ export class Proxy {
           case PacketTypes.TANK: {
             const tankType = data.readUint8(4);
 
-            log
-              .getLogger(ansi.blueBright(`TANK | Length: ${data.length}`))
-              .info(`[${netID}] Proxy Received ${TankTypes[tankType]}\n${this.toFullBuffer(data)}`);
-
             switch (tankType) {
               case TankTypes.CALL_FUNCTION: {
                 const variant = Variant.toArray(data);
 
                 log
-                  .getLogger(`${VariantTypes[variant[0].type]} | VariantList`)
+                  .getLogger(`TANK`)
                   .info(
-                    "\n",
-                    variant.map((v) => `[${v.index} | ${v.typeName}]: ${v.value}`).join("\n")
+                    `Incoming VariantList from server:\n${variant
+                      .map((v) => `[${v.typeName}]: ${v.value}`)
+                      .join("\n")}`,
+                    "\n"
                   );
 
-                if (variant[0].typeName === "STRING" && variant[0].value === "OnConsoleMessage") {
-                  const newText = `\`4[PROXY]\`\` ${variant[1].value}`;
+                if (variant[0].typeName === "STRING") {
+                  switch (variant[0].value) {
+                    case "OnConsoleMessage": {
+                      const newText = `\`4[PROXY]\`\` ${variant[1].value}`;
 
-                  data = Variant.from("OnConsoleMessage", newText).parse().parse();
-                } else if (variant[0].typeName === "STRING" && variant[0].value === "OnSpawn") {
-                  // const obj = new TextParser(variant[1].value as string);
-                  // obj.set("mstate", "1");
-                  // obj.set("smstate", "0");
-                  // console.log(obj.data, variant);
-                  // data = Variant.from({ delay: -1 }, "OnSpawn", obj.toString()).parse().parse();
-                } else if (
-                  variant[0].typeName === "STRING" &&
-                  variant[0].value === "OnSendToServer"
-                ) {
-                  const tokenize = (variant[4].value as string).split("|");
+                      data = Variant.from("OnConsoleMessage", newText).parse().parse();
+                      peer.send(data);
+                      break;
+                    }
 
-                  data = Variant.from(
-                    "OnSendToServer",
-                    this.server.port,
-                    variant[2].value,
-                    variant[3].value,
-                    `127.0.0.1|${tokenize[1]}|${tokenize[2]}`,
-                    variant[5].value
-                  )
-                    .parse()
-                    .parse();
-                  this.server.setDestIP(tokenize[0]);
-                  this.server.setDestPort(`${variant[1]?.value}`);
-                  this.setOnSend(true);
+                    case "OnSpawn": {
+                      const obj = new TextParser(variant[1].value as string);
+                      obj.set("mstate", "1");
+                      console.log("Original", variant[1].value);
+                      console.log("Changed", obj.data);
+                      // obj.set("smstate", "0");
+                      // data = Variant.from({ delay: -1 }, "OnSpawn", obj.toString()).parse().parse();
+                      peer.send(data);
+                      break;
+                    }
+                    case "OnSendToServer": {
+                      const tokenize = (variant[4].value as string).split("|");
+
+                      data = Variant.from(
+                        "OnSendToServer",
+                        this.server.port,
+                        variant[2].value,
+                        variant[3].value,
+                        `127.0.0.1|${tokenize[1]}|${tokenize[2]}`,
+                        variant[5].value
+                      )
+                        .parse()
+                        .parse();
+                      this.server.setDestIP(tokenize[0]);
+                      this.server.setDestPort(`${variant[1]?.value}`);
+                      this.setOnSend(true);
+                      peer.send(data);
+                      break;
+                    }
+
+                    default: {
+                      peer.send(data);
+                      break;
+                    }
+                  }
                 }
 
-                // peerProxy.send(data);
-                peer.send(data);
+                break;
+              }
 
+              case TankTypes.SEND_ITEM_DATABASE_DATA: {
+                // ignore
+
+                log
+                  .getLogger(`TANK`)
+                  .info(`Incoming TankType ${TankTypes[tankType]} from server:\nTOO LONG`, "\n");
+                peer.send(data);
+                break;
+              }
+
+              case TankTypes.SEND_MAP_DATA: {
+                // ignore
+
+                log
+                  .getLogger(`TANK`)
+                  .info(`Incoming TankType ${TankTypes[tankType]} from server:\nTOO LONG`, "\n");
+                peer.send(data);
                 break;
               }
 
               default: {
-                log.getLogger(`${TankTypes[tankType]}`).info(`${this.toFullBuffer(data)}`);
+                log
+                  .getLogger(`TANK`)
+                  .info(
+                    `Incoming TankType ${TankTypes[tankType]} from server:\n${this.toFullBuffer(
+                      data
+                    )}`,
+                    "\n"
+                  );
 
                 peer.send(data);
-
                 break;
               }
             }
-            // switch (tankType) {
-            //   case TankTypes.SEND_ITEM_DATABASE_DATA: {
-            //     // ignore
-            //     peer.send(data);
-            //     break;
-            //   }
+            break;
+          }
 
-            //   case TankTypes.CALL_FUNCTION: {
-
-            //     break;
-            //   }
-
+          default: {
+            log
+              .getLogger(`PACKET`)
+              .info(
+                `Incoming UnknownPacket ${PacketTypes[type]} from server:\n${this.toFullBuffer(
+                  data
+                )}`,
+                "\n"
+              );
+            peer.send(data);
             break;
           }
         }
-
-        // peer.send(data);
       })
       .listen();
   }
