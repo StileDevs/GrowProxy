@@ -192,14 +192,18 @@ export class Server {
               }
 
               default: {
+                const tankData = this.toFullBuffer(data.subarray(0, 60));
+                const extraLength = data.readUInt32LE(56);
+                const extraData =
+                  extraLength > 0 ? this.toFullBuffer(data.subarray(60, 60 + extraLength)) : "None";
+
                 log
                   .getLogger(`TANK`)
                   .info(
-                    `Incoming TankType ${TankTypes[tankType]} from proxy:\n${this.toFullBuffer(
-                      data
-                    )}`,
+                    `Incoming TankType ${TankTypes[tankType]} from proxy:\nTank Data:\n${tankData}\n\nExtra Data:\n${extraData}`,
                     "\n"
                   );
+
                 peerProxy.send(data);
 
                 break;
