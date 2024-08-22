@@ -11,7 +11,10 @@ export class TextParser {
 
     lines.forEach((line, i) => {
       const [key, ...values] = line.split("|");
-      this.data[key || `arr-${i}`] = values.length > 1 ? values : values[0];
+      this.data[key || `arr-${i}`] =
+        values.length > 1
+          ? values.map((v) => v?.replace(/[\uFFFD\x00]+$/g, ""))
+          : values[0]?.replace(/[\uFFFD\x00]+$/g, "");
     });
   }
 

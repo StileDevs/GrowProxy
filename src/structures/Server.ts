@@ -1,7 +1,7 @@
 import { Client, TextPacket, Peer, TankPacket, Variant } from "growtopia.js";
 import { Proxy } from "./Proxy.js";
 import { readFileSync } from "fs";
-import { ProxyConfig } from "../types";
+import { ProxyConfig, ServerData } from "../types";
 import log from "log4js";
 import crypto from "crypto";
 import { TankTypes } from "../enums/Tank.js";
@@ -17,6 +17,7 @@ export class Server {
   public klv: string;
   public destPort: string;
   public destIP: string;
+  public data: ServerData;
 
   constructor(public ip: string, public port: number) {
     this.client = new Client({
@@ -39,6 +40,9 @@ export class Server {
 
     this.config = JSON.parse(readFileSync("./config.json", "utf8"));
     this.proxyNetID = 0;
+    this.data = {
+      name: ""
+    };
   }
 
   public setProxyNetID(netID: number) {
@@ -69,6 +73,14 @@ export class Server {
     return data.toString("hex").match(/../g).join(" ");
   }
 
+  public get peer() {
+    return new Peer(this.client, this.proxy.serverNetID);
+  }
+
+  public get peerProxy() {
+    return new Peer(this.proxy.client, this.proxyNetID);
+  }
+
   public start() {
     this.client
       .on("ready", () => {
@@ -81,34 +93,18 @@ export class Server {
 
         this.proxy.setServerNetID(netID);
 
-        if (this.proxy.onsendserver) {
-          const peerProxy = new Peer(this.proxy.client, this.proxyNetID);
-
-          const connected = this.proxy.client.connect(
-            this.destIP,
-            parseInt(this.destPort),
-            this.proxyNetID
-          );
-          if (connected)
-            log
-              .getLogger("CONNECT")
-              .info(`Connecting proxy to sub-server ${this.destIP}:${this.destPort}`, "\n");
-        } else {
-          const connected = this.proxy.client.connect(
-            "213.179.209.168",
-            parseInt(this.destPort),
-            this.proxyNetID
-          );
-          if (connected)
-            log
-              .getLogger("CONNECT")
-              .info(`Connecting proxy to 213.179.209.168:${this.destPort}`, "\n");
-        }
+        const connected = this.proxy.client.connect(
+          this.destIP,
+          parseInt(this.destPort),
+          this.proxyNetID
+        );
+        if (connected)
+          log
+            .getLogger("CONNECT")
+            .info(`Connecting proxy to ${this.destIP}:${this.destPort}`, "\n");
       })
       .on("raw", (netID, data) => {
         const type = data.readUInt32LE(0);
-        const peerProxy = new Peer(this.proxy.client, this.proxyNetID);
-        const peer = new Peer(this.client, this.proxy.serverNetID);
 
         switch (type) {
           case PacketTypes.ACTION: {
@@ -116,7 +112,7 @@ export class Server {
 
             log.getLogger(`ACTION`).info(`Incoming Action from proxy:\n`, obj.data, "\n");
 
-            peerProxy.send(data);
+            this.peerProxy.send(data);
 
             break;
           }
@@ -125,21 +121,36 @@ export class Server {
             const obj = new TextParser(data.subarray(4).toString("utf-8"));
 
             log.getLogger(`STRING`).info(`Incoming String from proxy:\n`, obj.data, "\n");
-            peerProxy.send(data);
+            this.peerProxy.send(data);
             break;
           }
 
           case PacketTypes.TANK: {
             const tankType = data.readUint8(4);
+            const tank = TankPacket.fromBuffer(data);
 
             switch (tankType) {
+              case TankTypes.STATE: {
+                const x = Math.floor(tank.data.xPos / 32);
+                const y = Math.floor(tank.data.yPos / 32);
+                const variant = Variant.from(
+                  { netID },
+                  "OnNameChanged",
+                  `${this.data.name} \`4[${x}, ${y}]`,
+                  ""
+                );
+                this.peer.send(variant);
+                this.peerProxy.send(data);
+                break;
+              }
+
               case TankTypes.SEND_ITEM_DATABASE_DATA: {
                 // ignore
 
                 log
                   .getLogger(`TANK`)
                   .info(`Incoming TankType ${TankTypes[tankType]} from proxy:\nTOO LONG`, "\n");
-                peerProxy.send(data);
+                this.peerProxy.send(data);
                 break;
               }
               case TankTypes.SEND_MAP_DATA: {
@@ -148,14 +159,7 @@ export class Server {
                 log
                   .getLogger(`TANK`)
                   .info(`Incoming TankType ${TankTypes[tankType]} from proxy:\nTOO LONG`, "\n");
-                peerProxy.send(data);
-                break;
-              }
-
-              case TankTypes.STATE: {
-                // ignore, it spamming the console (might be implement a config for it)
-
-                peerProxy.send(data);
+                this.peerProxy.send(data);
                 break;
               }
 
@@ -169,10 +173,10 @@ export class Server {
                     "\n"
                   );
 
-                peer.send(data);
-                peer.disconnect("now");
-                peerProxy.send(data);
-                peerProxy.disconnect("now");
+                this.peer.send(data);
+                this.peer.disconnect("now");
+                this.peerProxy.send(data);
+                this.peerProxy.disconnect("now");
                 break;
               }
 
@@ -187,7 +191,7 @@ export class Server {
                       .join("\n")}`,
                     "\n"
                   );
-                peerProxy.send(data);
+                this.peerProxy.send(data);
                 break;
               }
 
@@ -204,7 +208,7 @@ export class Server {
                     "\n"
                   );
 
-                peerProxy.send(data);
+                this.peerProxy.send(data);
 
                 break;
               }
@@ -222,7 +226,7 @@ export class Server {
                 )}`,
                 "\n"
               );
-            peerProxy.send(data);
+            this.peerProxy.send(data);
             break;
           }
         }

@@ -4,12 +4,14 @@ import log from "log4js";
 import { PacketTypes, VariantTypes } from "../enums/Data.js";
 import { TankTypes } from "../enums/Tank.js";
 import { TextParser } from "./Utils.js";
+import type { ProxyData } from "../types/index.js";
 
 export class Proxy {
   public client: Client;
   public serverNetID: number;
   public server: Server;
   public onsendserver: boolean;
+  public data: ProxyData;
 
   constructor(public ip: string, public port: number) {
     this.client = new Client({
@@ -33,6 +35,9 @@ export class Proxy {
 
     this.serverNetID = 0;
     this.onsendserver = false;
+    this.data = {
+      name: ""
+    };
   }
 
   public setServerNetID(netID: number) {
@@ -55,6 +60,14 @@ export class Proxy {
     this.client._client.disconnectNow(this.server.proxyNetID);
   }
 
+  public get peer() {
+    return new Peer(this.server.client, this.serverNetID);
+  }
+
+  public get peerProxy() {
+    return new Peer(this.client, this.server.proxyNetID);
+  }
+
   public start() {
     this.client
       .on("ready", () => {
@@ -70,8 +83,6 @@ export class Proxy {
       })
       .on("raw", (netID, data) => {
         const type = data.readUInt32LE(0);
-        const peer = new Peer(this.server.client, this.serverNetID);
-        const peerProxy = new Peer(this.client, netID);
 
         switch (type) {
           case PacketTypes.HELLO: {
@@ -79,7 +90,7 @@ export class Proxy {
               .getLogger(`HELLO`)
               .info(`Incoming HelloPacket from server:\n${this.toFullBuffer(data)}`, "\n");
 
-            peer.send(data);
+            this.peer.send(data);
             break;
           }
 
@@ -87,7 +98,7 @@ export class Proxy {
             const obj = new TextParser(data.subarray(4).toString("utf-8"));
 
             log.getLogger(`ACTION`).info(`Incoming Action from server:\n`, obj.data, "\n");
-            peer.send(data);
+            this.peer.send(data);
             break;
           }
 
@@ -95,7 +106,7 @@ export class Proxy {
             const obj = new TextParser(data.subarray(4).toString("utf-8"));
 
             log.getLogger(`STRING`).info(`Incoming String from server:\n`, obj.data, "\n");
-            peer.send(data);
+            this.peer.send(data);
             break;
           }
 
@@ -121,7 +132,7 @@ export class Proxy {
                       const newText = `\`4[PROXY]\`\` ${variant[1].value}`;
 
                       data = Variant.from("OnConsoleMessage", newText).parse().parse();
-                      peer.send(data);
+                      this.peer.send(data);
                       break;
                     }
 
@@ -130,7 +141,12 @@ export class Proxy {
                       obj.set("mstate", "1");
                       // obj.set("smstate", "0");
                       data = Variant.from({ delay: -1 }, "OnSpawn", obj.toString()).parse().parse();
-                      peer.send(data);
+                      this.peer.send(data);
+                      break;
+                    }
+
+                    case "OnNameChanged": {
+                      this.server.data.name = variant[1].value as string;
                       break;
                     }
                     case "OnSendToServer": {
@@ -149,12 +165,12 @@ export class Proxy {
                       this.server.setDestIP(tokenize[0]);
                       this.server.setDestPort(`${variant[1]?.value}`);
                       this.setOnSend(true);
-                      peer.send(data);
+                      this.peer.send(data);
                       break;
                     }
 
                     default: {
-                      peer.send(data);
+                      this.peer.send(data);
                       break;
                     }
                   }
@@ -169,7 +185,7 @@ export class Proxy {
                 log
                   .getLogger(`TANK`)
                   .info(`Incoming TankType ${TankTypes[tankType]} from server:\nTOO LONG`, "\n");
-                peer.send(data);
+                this.peer.send(data);
                 break;
               }
 
@@ -179,7 +195,7 @@ export class Proxy {
                 log
                   .getLogger(`TANK`)
                   .info(`Incoming TankType ${TankTypes[tankType]} from server:\nTOO LONG`, "\n");
-                peer.send(data);
+                this.peer.send(data);
                 break;
               }
 
@@ -196,7 +212,7 @@ export class Proxy {
                     "\n"
                   );
 
-                peer.send(data);
+                this.peer.send(data);
                 break;
               }
             }
@@ -212,7 +228,7 @@ export class Proxy {
                 )}`,
                 "\n"
               );
-            peer.send(data);
+            this.peer.send(data);
             break;
           }
         }

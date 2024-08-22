@@ -10,7 +10,7 @@ log4js.configure({
     },
     file: {
       type: "file",
-      filename: "log/proxy.log"
+      filename: "data/log/proxy.log"
     }
   },
   categories: {
@@ -29,4 +29,4 @@ server.setProxy(proxy);
 
 proxy.start();
 server.start();
-Web(proxy, server);
+Web(server, proxy);
