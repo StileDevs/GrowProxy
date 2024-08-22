@@ -190,7 +190,10 @@ export class Proxy {
                 // ignore
                 log
                   .getLogger(`TANK`)
-                  .info(`Incoming TankType ${TankTypes[tankType]} from server:\nTOO LONG`, "\n");
+                  .info(
+                    `Incoming TankType ${TankTypes[tankType]} from server:\nTOO LONG, SAVING TO "./data/items-dat/${this.server.config.server.host}_${this.server.hashItemsDat}.dat"`,
+                    "\n"
+                  );
 
                 const extraLength = data.readUInt32LE(56);
                 const compressedItemsDat = data.subarray(60, 60 + extraLength);
