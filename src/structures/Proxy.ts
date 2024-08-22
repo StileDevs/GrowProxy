@@ -5,6 +5,8 @@ import { PacketTypes, VariantTypes } from "../enums/Data.js";
 import { TankTypes } from "../enums/Tank.js";
 import { TextParser } from "./Utils.js";
 import type { ProxyData } from "../types/index.js";
+import { inflateSync } from "zlib";
+import { mkdirSync, writeFileSync } from "fs";
 
 export class Proxy {
   public client: Client;
@@ -169,6 +171,12 @@ export class Proxy {
                       break;
                     }
 
+                    case "OnSuperMainStartAcceptLogonHrdxs47254722215a": {
+                      this.server.setHashItemsDat(parseInt(variant[1].value as string));
+                      this.peer.send(data);
+                      break;
+                    }
+
                     default: {
                       this.peer.send(data);
                       break;
@@ -178,13 +186,25 @@ export class Proxy {
 
                 break;
               }
-
               case TankTypes.SEND_ITEM_DATABASE_DATA: {
                 // ignore
-
                 log
                   .getLogger(`TANK`)
                   .info(`Incoming TankType ${TankTypes[tankType]} from server:\nTOO LONG`, "\n");
+
+                const extraLength = data.readUInt32LE(56);
+                const compressedItemsDat = data.subarray(60, 60 + extraLength);
+                let itemsdat: Buffer;
+
+                if (compressedItemsDat.readUint8(0) === 0x78) {
+                  itemsdat = inflateSync(compressedItemsDat);
+                } else itemsdat = compressedItemsDat;
+
+                mkdirSync("./data/items-dat/", { recursive: true });
+                writeFileSync(
+                  `./data/items-dat/${this.server.config.server.host}_${this.server.hashItemsDat}.dat`,
+                  itemsdat
+                );
                 this.peer.send(data);
                 break;
               }

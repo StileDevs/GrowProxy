@@ -18,6 +18,7 @@ export class Server {
   public destPort: string;
   public destIP: string;
   public data: ServerData;
+  public hashItemsDat: number;
 
   constructor(public ip: string, public port: number) {
     this.client = new Client({
@@ -40,6 +41,7 @@ export class Server {
 
     this.config = JSON.parse(readFileSync("./config.json", "utf8"));
     this.proxyNetID = 0;
+    this.hashItemsDat = 0;
     this.data = {
       name: ""
     };
@@ -67,6 +69,10 @@ export class Server {
 
   public setDestIP(ip: string) {
     this.destIP = ip;
+  }
+
+  public setHashItemsDat(num: number) {
+    this.hashItemsDat = num;
   }
 
   public toFullBuffer(data: Buffer) {
