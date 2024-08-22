@@ -3,7 +3,7 @@ import { Server } from "./Server.js";
 import log from "log4js";
 import { PacketTypes, VariantTypes } from "../enums/Data.js";
 import { TankTypes } from "../enums/Tank.js";
-import { TextParser } from "./Utils.js";
+import { IBuffer, TextParser } from "./Utils.js";
 import type { ProxyData } from "../types/index.js";
 import { inflateSync } from "zlib";
 import { mkdirSync, writeFileSync } from "fs";
@@ -83,7 +83,7 @@ export class Proxy {
       .on("disconnect", (netID) => {
         log.getLogger("DISCONNECT").info(`Proxy disconnect`, netID, "\n");
       })
-      .on("raw", (netID, data) => {
+      .on("raw", async (netID, data) => {
         const type = data.readUInt32LE(0);
 
         switch (type) {
@@ -203,9 +203,11 @@ export class Proxy {
                   itemsdat = inflateSync(compressedItemsDat);
                 } else itemsdat = compressedItemsDat;
 
-                mkdirSync("./data/items-dat/", { recursive: true });
+                mkdirSync(`./data/items-dat/${this.server.config.server.host}/`, {
+                  recursive: true
+                });
                 writeFileSync(
-                  `./data/items-dat/${this.server.config.server.host}_${this.server.hashItemsDat}.dat`,
+                  `./data/items-dat/${this.server.config.server.host}/${this.server.hashItemsDat}.dat`,
                   itemsdat
                 );
                 this.peer.send(data);
@@ -217,7 +219,31 @@ export class Proxy {
 
                 log
                   .getLogger(`TANK`)
-                  .info(`Incoming TankType ${TankTypes[tankType]} from server:\nTOO LONG`, "\n");
+                  .info(
+                    `Incoming TankType ${TankTypes[tankType]} from server:\nTOO LONG, SAVING MAP DATA TO "./data/map-data/${this.server.config.server.host}/${this.server.hashItemsDat}.dat"`,
+                    "\n"
+                  );
+
+                const extraLength = data.readUInt32LE(56);
+
+                const mapData = data.subarray(60, 60 + extraLength);
+                const worldData = new IBuffer(mapData.length);
+                worldData.data = mapData;
+
+                worldData.mempos = 6; // skip 6 byte world header
+
+                const worldName = await worldData.readString();
+                const width = worldData.readU32();
+                const height = worldData.readU32();
+                const blockCount = worldData.readU32();
+
+                mkdirSync(`./data/map-data/${this.server.config.server.host}/`, {
+                  recursive: true
+                });
+                writeFileSync(
+                  `./data/map-data/${this.server.config.server.host}/${worldName}-${width}x${height}-${blockCount}.dat`,
+                  worldData.data
+                );
                 this.peer.send(data);
                 break;
               }
