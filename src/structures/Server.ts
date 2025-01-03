@@ -29,12 +29,6 @@ export class Server {
         useNewPacket: {
           asClient: false
         }
-      },
-      https: {
-        enetPort: port,
-        enable: false,
-        ip
-        // type2: true
       }
     });
     // this.client.toggleNewPacket();
@@ -99,17 +93,13 @@ export class Server {
 
         this.proxy.setServerNetID(netID);
 
-        const connected = this.proxy.client.connect(
-          this.destIP,
-          parseInt(this.destPort),
-          this.proxyNetID
-        );
+        const connected = this.proxy.client.host.connect(this.destIP, parseInt(this.destPort));
         if (connected)
           log
             .getLogger("CONNECT")
             .info(`Connecting proxy to ${this.destIP}:${this.destPort}`, "\n");
       })
-      .on("raw", (netID, data) => {
+      .on("raw", (netID, channelID, data) => {
         const type = data.readUInt32LE(0);
 
         switch (type) {
@@ -239,7 +229,7 @@ export class Server {
       })
       .on("disconnect", (netID) => {
         log.getLogger("DISCONNECT").info("Client disconnected", netID, "\n");
-        this.proxy.client._client.disconnect(this.proxyNetID);
+        this.proxy.client.host.disconnect(this.proxyNetID);
       })
       .listen();
   }

@@ -1,18 +1,18 @@
 import axios from "axios";
-import express from "express";
 import { readFileSync } from "fs";
-import http from "http";
-import https from "https";
 import log from "log4js";
 import { DomainResolverStatus } from "../enums/Data.js";
 import { TextParser } from "./Utils.js";
 import type { Proxy } from "./Proxy.js";
 import type { Server } from "./Server.js";
-import { fileURLToPath } from "url";
-import path from "path";
+import { serveStatic } from "@hono/node-server/serve-static";
+import { join, relative } from "path";
+import { serve } from "@hono/node-server";
+import { createServer, Agent } from "https";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-import { PlayerRouter } from "../routes/api/growtopia/player.js";
+import { Hono } from "hono";
+import { logger as logg } from "hono/logger";
+import { ApiRoute } from "../routes/api.js";
 
 const options = {
   key: readFileSync("./assets/ssl/server.key"),
@@ -20,34 +20,40 @@ const options = {
 };
 
 export function Web(server: Server, proxy: Proxy) {
-  const app = express();
+  const app = new Hono();
 
-  app.use(express.urlencoded({ extended: true }));
-  app.use(express.json());
-  app.use("/assets", express.static(path.join(__dirname, "..", "..", "build", "assets")));
+  app.use(logg((str, ...rest) => log.getLogger("WEBSERVER").info(str, ...rest)));
+  app.use(
+    "/assets",
+    serveStatic({
+      root: relative(__dirname, join(__dirname, "..", "..", "build", "assets"))
+    })
+  );
 
-  app.get("/", (req, res) => {
-    res.sendFile(path.join(__dirname, "..", "..", "build", "index.html"));
+  app.get("/", (ctx) => {
+    return ctx.html(join(__dirname, "..", "..", "build", "index.html"));
   });
 
-  app.use("/api/growtopia/player", PlayerRouter(server, proxy));
+  // app.use("/api/growtopia/player", PlayerRouter(server, proxy));
+  app.route("/", new ApiRoute(server, proxy).execute());
 
-  app.use("/growtopia/server_data.php", async (req, res) => {
+  app.all("/growtopia/server_data.php", async (ctx) => {
     let host = server.config.server.host;
     let ip: string;
+
+    console.log("invoked");
 
     if (!/^(?:\d{1,3}\.){3}\d{1,3}$/.test(host)) {
       log.getLogger(`REQUEST`).info(`Fetching config host: ${host}`);
       const growtopia = await axios.get(`https://dns.google/resolve?name=${host}&type=A`);
-      if (growtopia.data.Status !== DomainResolverStatus.NoError)
-        return res.status(400).send("Failed");
+      if (growtopia.data.Status !== DomainResolverStatus.NoError) return ctx.status(400);
 
       const answer = growtopia.data.Answer;
       ip = answer[answer.length - 1].data as string;
       log.getLogger(`REQUEST`).info(`Successfully getting ip address of host ${host}: ${ip}`);
     } else ip = server.config.server.host;
 
-    const body = req.body;
+    const body = await ctx.req.parseBody();
 
     log.getLogger(`REQUEST`).info(`Fetching web server: ${ip}`);
     const result = await axios({
@@ -60,7 +66,7 @@ export function Web(server: Server, proxy: Proxy) {
         Host: "www.growtopia1.com"
       },
       data: `version=${body.version}&platform=${body.platform}&protocol=${body.protocol}`,
-      httpsAgent: new https.Agent({
+      httpsAgent: new Agent({
         rejectUnauthorized: false
       })
     });
@@ -76,14 +82,25 @@ export function Web(server: Server, proxy: Proxy) {
     textParsed.set("server", "127.0.0.1");
     textParsed.set("port", "17094");
     textParsed.delete("type2");
+    textParsed.delete("RTENDMARKERBS1001");
 
     const str = textParsed.toString(true);
-    res.send(str);
+
+    return ctx.body(str);
   });
 
-  const httpServer = http.createServer(app);
-  const httpsServer = https.createServer(options, app);
-
-  httpServer.listen(80);
-  httpsServer.listen(443);
+  serve(
+    {
+      fetch: app.fetch,
+      port: 443,
+      createServer,
+      serverOptions: {
+        key: options.key,
+        cert: options.cert
+      }
+    },
+    (info) => {
+      console.log(`⛅ Running HTTPS server on https://localhost`);
+    }
+  );
 }
