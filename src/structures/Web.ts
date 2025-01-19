@@ -41,8 +41,6 @@ export function Web(server: Server, proxy: Proxy) {
     let host = server.config.server.host;
     let ip: string;
 
-    console.log("invoked");
-
     if (!/^(?:\d{1,3}\.){3}\d{1,3}$/.test(host)) {
       log.getLogger(`REQUEST`).info(`Fetching config host: ${host}`);
       const growtopia = await axios.get(`https://dns.google/resolve?name=${host}&type=A`);
@@ -56,14 +54,16 @@ export function Web(server: Server, proxy: Proxy) {
     const body = await ctx.req.parseBody();
 
     log.getLogger(`REQUEST`).info(`Fetching web server: ${ip}`);
+    const headers = ctx.req.header();
+
     const result = await axios({
       method: "POST",
       url: `https://${ip}/growtopia/server_data.php?platform=${body.platform}&protocol=${body.protocol}&version=${body.version}`,
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
         Accept: "*/*",
-        "User-Agent": "UbiServices_SDK_2022.Release.9_PC64_ansi_static",
-        Host: "www.growtopia1.com"
+        "User-Agent": headers["user-agent"],
+        Host: headers.host
       },
       data: `version=${body.version}&platform=${body.platform}&protocol=${body.protocol}`,
       httpsAgent: new Agent({
@@ -81,7 +81,6 @@ export function Web(server: Server, proxy: Proxy) {
 
     textParsed.set("server", "127.0.0.1");
     textParsed.set("port", "17094");
-    textParsed.delete("type2");
     textParsed.delete("RTENDMARKERBS1001");
 
     const str = textParsed.toString(true);

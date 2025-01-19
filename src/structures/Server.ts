@@ -27,7 +27,7 @@ export class Server {
         port,
         maxPeers: 1024,
         useNewPacket: {
-          asClient: false
+          asServer: true
         }
       }
     });
@@ -90,6 +90,9 @@ export class Server {
         log
           .getLogger("CONNECT")
           .info(`New Client connected to server: ${netID} ProxyID: ${this.proxyNetID}`, "\n");
+
+        this.client.host.setTimeout(netID, 0, 0, 12000);
+        this.client.host.setPingInterval(netID, 32);
 
         this.proxy.setServerNetID(netID);
 

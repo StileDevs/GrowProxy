@@ -32,6 +32,10 @@ export class Proxy {
     this.data = {
       name: ""
     };
+
+    // initialize connection
+    this.client.host.connect("127.0.0.1", 0);
+    this.client.host.disconnectNow(0);
   }
 
   public setServerNetID(netID: number) {
@@ -63,10 +67,6 @@ export class Proxy {
   }
 
   public start() {
-    // initialize connection
-    const conn = this.client.host.connect("127.0.0.1", 0);
-    this.client.host.disconnectNow(0);
-
     this.client
       .on("ready", () => {
         log.getLogger("READY").info("Proxy Ready!");
@@ -74,6 +74,8 @@ export class Proxy {
       .on("connect", (netID) => {
         log.getLogger("CONNECT").info(`Proxy successfully connect`, "\n");
         this.server.setProxyNetID(netID);
+        this.client.host.setTimeout(netID, 0, 0, 12000);
+        this.client.host.setPingInterval(netID, 32);
       })
       .on("disconnect", (netID) => {
         log.getLogger("DISCONNECT").info(`Proxy disconnect`, netID, "\n");
