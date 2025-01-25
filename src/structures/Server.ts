@@ -27,7 +27,7 @@ export class Server {
         port,
         maxPeers: 1024,
         useNewPacket: {
-          asServer: true
+          asServer: false
         }
       }
     });

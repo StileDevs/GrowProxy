@@ -81,6 +81,7 @@ export function Web(server: Server, proxy: Proxy) {
 
     textParsed.set("server", "127.0.0.1");
     textParsed.set("port", "17094");
+    textParsed.delete("type2");
     textParsed.delete("RTENDMARKERBS1001");
 
     const str = textParsed.toString(true);
