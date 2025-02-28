@@ -3,8 +3,8 @@ import { Client, TextPacket, Peer } from "growtopia.js";
 const client = new Client({
   enet: {
     ip: "0.0.0.0",
-    port: 17091
-  }
+    port: 17091,
+  },
 });
 
 client.on("ready", () => {
@@ -27,7 +27,7 @@ client.on("disconnect", (netID) => {
 
 client.on("raw", (netID, channelID, data) => {
   const peer = new Peer(client, netID);
-  console.log("raw", data);
+  console.log("raw", peer, data);
 });
 
 client.listen();

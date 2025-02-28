@@ -2,10 +2,10 @@
   "files": [],
   "references": [
     {
-      "path": "./tsconfig.nuxt.json"
+      "path": "./tsconfig.node.json"
     },
     {
-      "path": "./tsconfig.proxy.json"
+      "path": "./tsconfig.app.json"
     }
   ]
 }
