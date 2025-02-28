@@ -5,7 +5,6 @@
   "type": "module",
   "main": "proxy/index.ts",
   "scripts": {
-<<<<<<< HEAD
     "dev": "vite",
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
@@ -13,48 +12,19 @@
     "type-check": "vue-tsc --build",
     "lint": "eslint . --fix",
     "format": "prettier --write src/"
-=======
-    "build": "nuxt build",
-    "dev": "nr concurrent \"nr proxy:start\" \"nuxt dev\"",
-    "generate": "nuxt generate",
-    "preview": "nuxt preview",
-    "postinstall": "nuxt prepare",
-    "start:web": "node ./.output/server/index.mjs",
-    "concurrent": "concurrently -p \"[{name}]\" -n \"PROXY,WEB\" -c \"bgGreen.bold,bgBlue.bold\"",
-    "start": "nr concurrent \"nr proxy:start\" \"nr start:web\"",
-    "proxy:start": "tsx proxy/index.ts"
->>>>>>> a28c01eeae380e9d622233b0e8d76bd49843c304
   },
   "author": "JadlionHD <jadlion.dev@gmail.com>",
   "license": "MIT",
   "dependencies": {
-<<<<<<< HEAD
     "@antfu/ni": "^23.3.1",
     "concurrently": "^9.1.2",
     "consola": "^3.4.0",
-=======
-    "@hono/node-server": "^1.13.8",
-    "@nuxt/icon": "1.10.3",
-    "@nuxt/ui": "2.21.0",
-    "@nuxtjs/google-fonts": "3.2.0",
-    "@nuxtjs/tailwindcss": "6.13.1",
-    "@pinia/nuxt": "^0.10.1",
-    "@vueuse/nuxt": "12.7.0",
->>>>>>> a28c01eeae380e9d622233b0e8d76bd49843c304
     "growtopia.js": "^2.0.14",
     "hono": "^4.7.2",
     "ky": "^1.7.5",
-<<<<<<< HEAD
     "pinia": "^3.0.1",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0"
-=======
-    "log4js": "^6.9.1",
-    "nuxt": "^3.15.4",
-    "pinia": "^3.0.1",
-    "vue": "latest",
-    "vue-router": "latest"
->>>>>>> a28c01eeae380e9d622233b0e8d76bd49843c304
   },
   "devDependencies": {
     "@primeuix/themes": "^1.0.0",
