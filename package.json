@@ -5,7 +5,9 @@
   "type": "module",
   "main": "proxy/index.ts",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -p \"[{name}]\" -n \"PROXY,WEB\" -c \"bgGreen.bold,bgBlue.bold\" \"nr dev:proxy\" \"nr dev:web\"",
+    "dev:proxy": "nr proxy/index.ts",
+    "dev:web": "vite",
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "build-only": "vite build",

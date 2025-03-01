@@ -5,8 +5,8 @@ export class ProxyManager {
   public server: Server;
   public proxies: Proxy[];
 
-  constructor(usingServer: boolean) {
-    if (!usingServer) this.server = new Server();
+  constructor() {
+    this.server = new Server();
 
     this.proxies = [];
   }
