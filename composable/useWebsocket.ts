@@ -2,8 +2,8 @@ import { io } from "socket.io-client";
 
 export const useWebsocket = () => {
   const isConnected = ref(false);
-  const transport = ref("N/A");
-  const socket = io();
+  const transport = ref("N/A"); // Connect to the server with explicit URL
+  const socket = io(import.meta.client ? window.location.origin : undefined);
 
   const onConnect = () => {
     isConnected.value = true;

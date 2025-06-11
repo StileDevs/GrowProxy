@@ -1,10 +1,7 @@
-import { useGrowClient, useGrowServer } from "../lib/grow-proxy";
+import { useGrowProxy } from "../lib/grow-proxy";
 
 export default defineEventHandler((_event) => {
-  const client = useGrowClient();
-  const server = useGrowServer();
+  const proxy = useGrowProxy();
 
-  console.log("client", client);
-  console.log("server", server);
   return { hello: "world" };
 });
