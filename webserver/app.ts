@@ -72,8 +72,8 @@ import { join } from "path";
     textParsed.set("port", "17091");
     textParsed.delete("RTENDMARKERBS1001");
 
-    console.log(textParsed);
     const str = textParsed.toString(true);
+    console.log(str);
 
     return ctx.body(str);
   });

@@ -1,9 +1,10 @@
-import { Client } from "growtopia.js";
+import { Client, Peer } from "growtopia.js";
 import { readFileSync } from "fs";
 import { join } from "path";
 
 // Import the io instance so we can emit events
 import { useSocketIO } from "../utils/socketIOInstance";
+import { storage } from "~/server/services/storage";
 
 const hostConfigPath = join(process.cwd(), ".config/host.json");
 let hostConfig;
@@ -35,7 +36,8 @@ const client = new Client({
 
 const server = new Client({
   enet: {
-    port: 0,
+    port: 17091,
+    // port: 0,
     ip: "0.0.0.0",
     useNewPacket: {
       asClient: false
@@ -50,70 +52,101 @@ client.host.disconnectNow(0);
 server.listen();
 client.listen();
 
-client.on("connect", () => {
+client.on("connect", async () => {
   console.log("Client connected to Growtopia server");
-  io.emit("client_traffic", {
+  const eventData = {
     type: "connect",
     message: "Connected to Growtopia server",
     timestamp: new Date().toISOString()
-  });
+  };
+
+  // Save to storage
+  await storage.setItem(`client_events:${Date.now()}`, eventData);
+
+  io.emit("client_traffic", eventData);
 });
 
-client.on("raw", (netID, _channelID, data) => {
+client.on("raw", async (netID, _channelID, data) => {
   // Create peer if needed for other operations
   // const clientPeer = new Peer(client, netID);
   console.log("Client Raw data received from Growtopia client:", data);
-  io.emit("client_traffic", {
+  const eventData = {
     type: "raw",
     netID,
     channelID: _channelID,
     data: data.toString("hex").match(/../g)?.join(" "), // Convert buffer to hex string for websocket
     timestamp: new Date().toISOString()
-  });
+  };
+
+  // Save to storage
+  await storage.setItem(`client_raw:${Date.now()}`, eventData);
+
+  io.emit("client_traffic", eventData);
 });
 
-client.on("disconnect", () => {
+client.on("disconnect", async () => {
   console.log("Client disconnected from Growtopia server");
-  io.emit("client_traffic", {
+  const eventData = {
     type: "disconnect",
     message: "Disconnected from Growtopia server",
     timestamp: new Date().toISOString()
-  });
+  };
+
+  // Save to storage
+  await storage.setItem(`client_events:${Date.now()}`, eventData);
+
+  io.emit("client_traffic", eventData);
 });
 
-server.on("connect", (netID) => {
-  const serverPeer = new Peer(server, netID);
+server.on("connect", async (netID) => {
+  const _serverPeer = new Peer(server, netID);
   console.log("Server connected to Growtopia client");
   console.log(`Connecting to Growtopia server: ${hostConfig.fetched.ip}:${hostConfig.fetched.port}`);
   client.host.connect(hostConfig.fetched.ip, hostConfig.fetched.port);
-  io.emit("server_traffic", {
+
+  const eventData = {
     type: "connect",
     netID,
     message: "Growtopia client connected to server",
     timestamp: new Date().toISOString()
-  });
+  };
+
+  // Save to storage
+  await storage.setItem(`server_events:${Date.now()}`, eventData);
+
+  io.emit("server_traffic", eventData);
 });
 
-server.on("raw", (netID, _channelID, data) => {
+server.on("raw", async (netID, _channelID, data) => {
   // const serverPeer = new Peer(client, netID);
   console.log("Server Raw data received from Growtopia client:", data);
-  io.emit("server_traffic", {
+  const eventData = {
     type: "raw",
     netID,
     channelID: _channelID,
     data: data.toString("hex").match(/../g)?.join(" "), // Convert buffer to hex string for websocket
     timestamp: new Date().toISOString()
-  });
+  };
+
+  // Save to storage
+  await storage.setItem(`server_raw:${Date.now()}`, eventData);
+
+  io.emit("server_traffic", eventData);
 });
 
-server.on("disconnect", (netID) => {
+server.on("disconnect", async (netID) => {
   console.log("Server disconnected from Growtopia client");
-  io.emit("server_traffic", {
+  const eventData = {
     type: "disconnect",
     netID,
     message: "Growtopia client disconnected from server",
     timestamp: new Date().toISOString()
-  });
+  };
+
+  // Save to storage
+  await storage.setItem(`server_events:${Date.now()}`, eventData);
+
+  io.emit("server_traffic", eventData);
 });
 
 export const useGrowProxy = () => {
